@@ -44,15 +44,13 @@ function Module.CreateSpring(InitialValue: ValueTypes, Params: SpringParams) : S
 		Type = typeof(InitialValue.Position)
 	end
 	
-	if Type == "number" then
-		Spring.Velocity = 0
-	elseif Type == "Vector3" then
-		Spring.Velocity = Vector3.zero
-	elseif Type == "Vector2" then
-		Spring.Velocity = Vector2.zero
-	else
+	local Success = pcall(function()
+		Spring.Velocity = InitialValue * 0
+	end)
+	if not Success then
 		error("Unsupported value type for spring: " .. Type)
 	end
+	
 	Spring.PositionType = Type
 	
 	if Params then
