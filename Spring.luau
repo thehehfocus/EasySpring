@@ -27,7 +27,7 @@ type CalculationParams = SpringParams & {
 
 local RunService = game:GetService("RunService")
 
-function Module.CreateSpring(InitialValue: ValueTypes, Params: SpringParams) : Spring
+function Module.CreateSpring<T>(InitialValue: T, Params: SpringParams) : Spring
 	local Spring = setmetatable({
 		CurrentValue = InitialValue,
 		CurrentPos = InitialValue,
@@ -40,12 +40,13 @@ function Module.CreateSpring(InitialValue: ValueTypes, Params: SpringParams) : S
 	}, SpringClass)
 	
 	local Type = typeof(InitialValue)
-	if Type == "Instance" then
-		Type = typeof(InitialValue.Position)
-	end
 	
 	local Success = pcall(function()
-		Spring.Velocity = InitialValue * 0
+		if Type == "Instance" then
+			Spring.Velocity = InitialValue.Position * 0
+		else
+			Spring.Velocity = InitialValue * 0
+		end
 	end)
 	if not Success then
 		error("Unsupported value type for spring: " .. Type)
