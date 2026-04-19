@@ -5,6 +5,7 @@ Small dynamic spring module.
 Just copy Spring.luau.
 
 ## Usage
+- Supported position types are any objects that support basic math operations. Specifically '+', '-', '*'
 
 Using Part(or instance with valid position types):
 ```lua
