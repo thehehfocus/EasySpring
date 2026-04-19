@@ -13,7 +13,7 @@ export type SpringParams = typeof(DefaultSpring)
 local SpringClass = {}
 SpringClass.__index = SpringClass
 
-export type Spring<T = ResultTypes> = setmetatable<{
+export type Spring = setmetatable<{
 	CurrentValue: ValueTypes,
 	CurrentPos: ResultTypes,
 	TargetValue: ResultTypes,
