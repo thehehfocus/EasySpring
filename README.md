@@ -1,6 +1,9 @@
 # EasySpring
 Small dynamic spring module.
 
+## Installation
+Just copy Spring.luau.
+
 ## Usage
 
 Using Part(or instance with valid position types):
