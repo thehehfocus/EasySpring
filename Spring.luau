@@ -27,7 +27,7 @@ type CalculationParams = SpringParams & {
 
 local RunService = game:GetService("RunService")
 
-function Module.CreateSpring<T>(InitialValue: T, Params: SpringParams) : Spring
+function Module.CreateSpring(InitialValue: ValueTypes, Params: SpringParams) : Spring
 	local Spring = setmetatable({
 		CurrentValue = InitialValue,
 		CurrentPos = InitialValue,
