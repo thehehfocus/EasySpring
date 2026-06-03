@@ -1,133 +1,152 @@
-local Module = {}
+const Module = {}
 
-type ResultTypes = number|Vector3|Vector2
-type ValueTypes = ResultTypes | (Instance & {Position: ResultTypes})
-
-local DefaultSpring = {
-	Damping = 0.7,
-	Stiffness = 1,
+--== Config ==--
+const Iterations = 1
+const DefaultSpring = {
+	Damping = 0.8,
+	Force = 4,
 	Speed = 1,
+	Mass = 1,
+	Velocity = 0 :: Types,
 }
+
+--== Services ==--
+const RunService = game:GetService("RunService")
+
+--== Types ==--
+type Types = number|Vector3|Vector2
+
 export type SpringParams = typeof(DefaultSpring)
 
-local SpringClass = {}
+const SpringClass = {}
 SpringClass.__index = SpringClass
 
-export type Spring = setmetatable<{
-	CurrentValue: ValueTypes,
-	CurrentPos: ResultTypes,
-	TargetValue: ResultTypes,
-	Velocity: ResultTypes,
-} & SpringParams, typeof(SpringClass)>
+export type Spring<T = Types> = {
+	Value: T,
+	Target: T,
 
-type CalculationParams = SpringParams & {
-	Velocity: ResultTypes,
-	AsOffset: boolean?,
+	Properties: {
+		Velocity: T,
+		Mass: number,
+		Damping: number,
+		Force: number,
+		Speed: number,
+	},
+	BoundInstance: (Instance & { Position: Types })?,
+
+	Start: (self: Spring<T>, Callback: (Spring: Spring, dt: number) -> ()?) -> RBXScriptConnection,
+	Update: (self: Spring<T>, dt: number) -> T,
+	Shove: (self: Spring<T>, Velocity: T) -> (),
+	SetTarget: (self: Spring<T>, Target: T) -> (),
 }
 
-local RunService = game:GetService("RunService")
+--== Main ==--
+function Module.CreateSpring(InitialValue: Types|(Instance&{Position: Types}), Params: SpringParams?) : Spring
+	Params = Params or {}
 
-function Module.CreateSpring(InitialValue: ValueTypes, Params: SpringParams) : Spring
 	local Spring = setmetatable({
-		CurrentValue = InitialValue,
-		CurrentPos = InitialValue,
-		TargetValue = InitialValue,
-		Velocity = 0,
-		
-		Damping = DefaultSpring.Damping,
-		Stiffness = DefaultSpring.Stiffness,
-		Speed = DefaultSpring.Speed,
+		Value = InitialValue,
+		Target = nil,
+
+		Properties = {
+			Velocity = 0,
+			Mass = Params.Mass or DefaultSpring.Mass,
+			Damping = Params.Damping or DefaultSpring.Damping,
+			Force = Params.Force or DefaultSpring.Force,
+			Speed = Params.Speed or DefaultSpring.Speed,
+		}
 	}, SpringClass)
-	
+
 	local Type = typeof(InitialValue)
-	
 	local Success = pcall(function()
 		if Type == "Instance" then
-			Spring.Velocity = InitialValue.Position * 0
+			Spring.BoundInstance = InitialValue
+			Spring.Value = InitialValue.Position
+			Spring.Properties.Velocity = Spring.Value * 0
 		else
-			Spring.Velocity = InitialValue * 0
+			Spring.Properties.Velocity = InitialValue * 0
 		end
 	end)
 	if not Success then
 		error("Unsupported value type for spring: " .. Type)
 	end
-	
-	Spring.PositionType = Type
-	
-	if Params then
-		for key, value in Params do
-			Spring[key] = value
-		end
-	end
-	
+
 	return Spring
 end
 
 function Module.CalculateSpring(
-	Origin: ValueTypes, 
-	Target: ValueTypes, 
+	Origin: Types, 
+	Target: Types, 
 	dt: number,
-	Params: CalculationParams
-) : (ResultTypes, ResultTypes)
-	if typeof(Origin) == "Instance" then
-		Origin = Origin.Position
-	end
-	if typeof(Target) == "Instance" then
-		Target = Target.Position
-	end
-	
+	Params: SpringParams & { Velocity: Types }
+) : (Types, Types)
+	Params = Params or {}
+
 	local Speed = Params.Speed or DefaultSpring.Speed
-	local Stiffness = Params.Stiffness or DefaultSpring.Stiffness
+	local Force = Params.Force or DefaultSpring.Force
 	local Damping = Params.Damping or DefaultSpring.Damping
-	local Velocity = Params.Velocity or 0
-	
+	local Mass = Params.Mass or DefaultSpring.Mass
+	local Velocity = Params.Velocity or Origin * 0
+
 	local Delta = Target - Origin
 	local DtSpeed = dt * Speed
-	
-	local Force = (Stiffness * Delta)
+
+	local Force = (Delta * Force) / Mass
 	local DampingForce = (Velocity * -Damping)
-	local Acceleration = Force + DampingForce
-	
+	local Acceleration = (Force + DampingForce)
+
 	Velocity = Velocity + Acceleration * DtSpeed
 	local ResultValue = Origin + Velocity * DtSpeed
-	
-	if Params.AsOffset then
-		return ResultValue - Origin, Velocity
-	else
-		return ResultValue, Velocity
-	end
+
+	return ResultValue, Velocity
 end
 
-function SpringClass.Start(self: Spring, Callback: (NewPos: ResultTypes, Velocity: ResultTypes) -> ()?)
+function SpringClass.Start(self: Spring, Callback: (Spring: Spring, dt: number) -> ()?)
 	local Connection = RunService.Heartbeat:Connect(function(dt)
 		self:Update(dt)
-		if Callback then Callback(self.CurrentPos, self.Velocity) end
+		if Callback then Callback(self, dt) end
 	end)
-	
+
 	return Connection
 end
 
 function SpringClass.Update(self: Spring, dt: number)
-	local ResultValue, Velocity = Module.CalculateSpring(
-		self.CurrentValue, 
-		self.TargetValue, 
-		dt,
-		self
-	)
-	
-	if typeof(self.CurrentValue) == "Instance" then
-		self.CurrentValue.Position = ResultValue
-	else
-		self.CurrentValue = ResultValue
+	if self.BoundInstance then
+		self.Value = self.BoundInstance.Position
 	end
-	self.CurrentPos = ResultValue
-	self.Velocity = Velocity
-	
+
+	local ScaledDt = dt / Iterations
+
+	local ResultValue, Velocity
+	for i=1, Iterations do
+		ResultValue, Velocity = Module.CalculateSpring(
+			self.Value, 
+			self.Target, 
+			ScaledDt,
+			self.Properties
+		)
+
+		if self.BoundInstance then
+			self.BoundInstance.Position = ResultValue
+		else
+			self.Value = ResultValue
+		end
+		self.Properties.Velocity = Velocity
+	end
+
 	return ResultValue
 end
 
-function SpringClass.SetTarget(self: Spring, Target: ValueTypes)
-	self.TargetValue = Target
+function SpringClass.Shove(self: Spring, Force: Types)
+	if math.isinf(Force) or math.isnan(Force) then
+		return
+	end
+
+	self.Properties.Velocity += Force
+end
+
+function SpringClass.SetTarget(self: Spring, Target: Types)
+	self.Target = Target
 end
 
 return Module
